@@ -1,0 +1,21 @@
+# Ignorar el entorno virtual (se creará uno nuevo dentro de Docker)
+venv/
+.venv/
+
+# Ignorar historial de git y configuración de IDE
+.git/
+.vscode/
+.idea/
+
+# Ignorar archivos temporales de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignorar archivos de pruebas y documentación pesada si no hacen falta en producción
+Pruebas/
+Referencias/
+
+# Ignorar archivos locales de entorno (por seguridad)
+.env
