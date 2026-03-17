@@ -6,10 +6,10 @@ import os
 import json
 
 # --- CONFIGURACIÓN DESDE RAILWAY ---
-# Railway inyecta DATABASE_URL automáticamente si conectas el plugin
+
 DB_URL = os.getenv("DATABASE_URL")
-# MQTT_HOST debe ser el nombre de tu servicio (ej: mosquitto.railway.internal)
-MQTT_BROKER = os.getenv("MQTT_HOST", "mosquitto.railway.internal")
+
+MQTT_BROKER = os.getenv("MQTT_HOST", "mqtt-server")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 
 # --- 1. CONEXIÓN A POSTGRES CON REINTENTOS ---
@@ -24,7 +24,6 @@ while True:
         conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         
-        # Crear tabla con soporte para JSONB (ideal para TFM y análisis)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS telemetria (
                 id SERIAL PRIMARY KEY,
@@ -43,16 +42,15 @@ while True:
 # --- 2. LÓGICA DE RECEPCIÓN MQTT ---
 def on_message(client, userdata, msg):
     try:
-        # Decodificamos el mensaje de Jaén
+       
         raw_payload = msg.payload.decode()
         
-        # Validamos si es JSON, si no, lo guardamos como texto plano en el JSONB
         try:
             payload_to_store = json.loads(raw_payload)
         except:
             payload_to_store = json.dumps({"raw_text": raw_payload})
 
-        # Insertar en Postgres
+       
         query = "INSERT INTO telemetria (topic, payload) VALUES (%s, %s)"
         cursor.execute(query, (msg.topic, json.dumps(payload_to_store)))
         conn.commit()

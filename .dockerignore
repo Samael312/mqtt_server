@@ -13,9 +13,6 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Ignorar archivos de pruebas y documentación pesada si no hacen falta en producción
-Pruebas/
-Referencias/
 
 # Ignorar archivos locales de entorno (por seguridad)
 .env
