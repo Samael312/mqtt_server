@@ -90,6 +90,7 @@ while True:
                 sensor_id  VARCHAR(64) NOT NULL,
                 level      VARCHAR(10) NOT NULL,
                 variable   VARCHAR(64) NOT NULL,
+                value      DOUBLE PRECISION NOT NULL,
                 message    TEXT        NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_sfa_alerts_sensor_ts
