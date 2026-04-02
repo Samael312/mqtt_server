@@ -4,9 +4,12 @@ bridge.py — Railway
 Suscriptor MQTT que persiste en PostgreSQL.
 
 Por cada mensaje recibido en universidad/jaen/{sensor_id}/{variable}:
-  1. Inserta en `telemetria`   (raw log, como antes)
+  1. Inserta en `telemetria`   (raw log, siempre)
   2. Inserta en `sfa_readings` (EAV limpia)
-  3. Evalúa umbrales e inserta en `sfa_alerts` si procede
+
+La evaluación de alertas NO ocurre aquí.
+Las reglas se configuran desde el dashboard y se evalúan
+en la API mediante GET /internal/dashboard/sfa/alerts/evaluate
 """
 
 import json
@@ -24,7 +27,7 @@ DB_URL      = os.getenv("DATABASE_URL")
 MQTT_BROKER = os.getenv("MQTT_HOST", "mqtt-server")
 MQTT_PORT   = int(os.getenv("MQTT_PORT", 1883))
 TOPIC_SUB   = "universidad/jaen/#"
-TOPIC_BASE  = "universidad/jaen"   # para parsear sensor_id y variable
+TOPIC_BASE  = "universidad/jaen"
 
 # ==========================================
 # VARIABLES SFA CONOCIDAS
@@ -40,16 +43,6 @@ KNOWN_VARIABLES = {
 }
 
 # ==========================================
-# UMBRALES DE ALERTA
-# ==========================================
-ALERT_RULES = [
-    {"variable": "tension_bateria",     "threshold": 11.8, "operator": "<=",
-     "level": "warning", "message": "Tensión baja: {value} V"},
-    {"variable": "temperatura_bateria", "threshold": 45.0, "operator": ">=",
-     "level": "warning", "message": "Temperatura alta: {value} °C"},
-]
-
-# ==========================================
 # CONEXIÓN A POSTGRESQL CON REINTENTOS
 # ==========================================
 conn   = None
@@ -63,7 +56,7 @@ while True:
         conn   = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
 
-        # --- Tabla raw (existente) ---
+        # Tabla raw
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS telemetria (
                 id      SERIAL PRIMARY KEY,
@@ -73,7 +66,7 @@ while True:
             );
         """)
 
-        # --- Tabla limpia EAV ---
+        # Tabla EAV limpia
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sfa_readings (
                 id            BIGSERIAL        PRIMARY KEY,
@@ -84,12 +77,11 @@ while True:
                 source        VARCHAR(20)      DEFAULT 'mqtt',
                 telemetria_id BIGINT
             );
-
             CREATE INDEX IF NOT EXISTS idx_sfa_readings_sensor_var_ts
                 ON sfa_readings (sensor_id, variable, timestamp DESC);
         """)
 
-        # --- Tabla de alertas ---
+        # Tabla de alertas (creada aquí, gestionada por la API)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sfa_alerts (
                 id         BIGSERIAL   PRIMARY KEY,
@@ -100,9 +92,25 @@ while True:
                 variable   VARCHAR(64) NOT NULL,
                 message    TEXT        NOT NULL
             );
-
             CREATE INDEX IF NOT EXISTS idx_sfa_alerts_sensor_ts
                 ON sfa_alerts (sensor_id, timestamp DESC);
+        """)
+
+        # Tabla de reglas de alerta (configuradas desde el dashboard)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alert_rules (
+                id         BIGSERIAL    PRIMARY KEY,
+                sensor_id  VARCHAR(64)  NOT NULL,
+                variable   VARCHAR(64)  NOT NULL,
+                operator   VARCHAR(2)   NOT NULL,  -- '<=' o '>='
+                threshold  DOUBLE PRECISION NOT NULL,
+                level      VARCHAR(10)  NOT NULL DEFAULT 'warning',
+                message    TEXT         NOT NULL,
+                created_at TIMESTAMPTZ  DEFAULT NOW(),
+                UNIQUE (sensor_id, variable, operator)
+            );
+            CREATE INDEX IF NOT EXISTS idx_alert_rules_sensor
+                ON alert_rules (sensor_id);
         """)
 
         conn.commit()
@@ -147,31 +155,6 @@ def _insert_reading(sensor_id: str, variable: str, value: float,
     return cursor.fetchone()[0]
 
 
-def _insert_alerts(reading_id: int, sensor_id: str,
-                   variable: str, value: float, timestamp: datetime):
-    for rule in ALERT_RULES:
-        if rule["variable"] != variable:
-            continue
-        fired = (value <= rule["threshold"] if rule["operator"] == "<="
-                 else value >= rule["threshold"])
-        if not fired:
-            continue
-        cursor.execute("""
-            INSERT INTO sfa_alerts
-                (reading_id, timestamp, sensor_id, level, variable, message)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (
-            reading_id,
-            timestamp,
-            sensor_id,
-            rule["level"],
-            variable,
-            rule["message"].format(value=round(value, 2)),
-        ))
-        print(f"  ⚠️  [{sensor_id}] {rule['level'].upper()} — "
-              f"{rule['message'].format(value=round(value, 2))}")
-
-
 # ==========================================
 # CALLBACKS MQTT
 # ==========================================
@@ -195,11 +178,10 @@ def on_message(client, userdata, msg):
         # 1. Insertar en telemetria (siempre)
         tel_id = _insert_telemetria(msg.topic, payload)
 
-        # 2. Parsear topic para obtener sensor_id y variable
+        # 2. Parsear topic
         sensor_id, variable = _parse_topic(msg.topic)
 
         if sensor_id and variable and variable in KNOWN_VARIABLES:
-            # 3. Extraer value y timestamp
             try:
                 value = float(payload.get("value") or payload.get(variable))
             except (TypeError, ValueError):
@@ -217,12 +199,8 @@ def on_message(client, userdata, msg):
 
             source = payload.get("source", "mqtt")
 
-            # 4. Insertar en sfa_readings
-            reading_id = _insert_reading(sensor_id, variable, value, ts, source, tel_id)
-
-            # 5. Evaluar alertas
-            _insert_alerts(reading_id, sensor_id, variable, value, ts)
-
+            # 3. Insertar en sfa_readings (sin evaluar alertas)
+            _insert_reading(sensor_id, variable, value, ts, source, tel_id)
             print(f"📥 [{sensor_id}] {variable} = {value}  (tel_id={tel_id})")
         else:
             print(f"📥 [raw] {msg.topic} guardado en telemetria (id={tel_id})")
