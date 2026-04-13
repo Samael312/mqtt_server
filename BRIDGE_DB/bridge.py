@@ -57,6 +57,16 @@ while True:
         cursor = conn.cursor()
 
         # Tabla raw
+
+        cursor.excute("""
+            CREATE TABLE IF NOT EXISTS users (
+                      id SERIAL PRIMARY KEY,
+                      username VARCHAR(50) UNIQUE NOT NULL,
+                      password_hash VARCHAR(128) NOT NULL,
+                      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );  
+        """)
+        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS telemetria (
                 id      SERIAL PRIMARY KEY,
