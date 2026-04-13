@@ -58,7 +58,7 @@ while True:
 
         # Tabla raw
 
-        cursor.excute("""
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                       id SERIAL PRIMARY KEY,
                       username VARCHAR(50) UNIQUE NOT NULL,
@@ -66,7 +66,7 @@ while True:
                       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );  
         """)
-        
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS telemetria (
                 id      SERIAL PRIMARY KEY,
