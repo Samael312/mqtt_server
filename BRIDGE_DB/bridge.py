@@ -26,20 +26,20 @@ import paho.mqtt.client as mqtt
 DB_URL      = os.getenv("DATABASE_URL")
 MQTT_BROKER = os.getenv("MQTT_HOST", "mqtt-server")
 MQTT_PORT   = int(os.getenv("MQTT_PORT", 1883))
-TOPIC_SUB   = "universidad/jaen/#"
-TOPIC_BASE  = "universidad/jaen"
+TOPIC_SUB   = "uja/s1/#"
+TOPIC_BASE  = "uja/s1"
 
 # ==========================================
 # VARIABLES SFA CONOCIDAS
 # ==========================================
 KNOWN_VARIABLES = {
-    "radiacion_solar",
-    "temperatura_ambiente",
-    "corriente_generada",
-    "tension_bateria",
-    "corriente_bateria",
-    "corriente_carga",
-    "temperatura_bateria",
+    "radiacion",
+    "temp_amb",
+    "i_generada",
+    "v_bateria",
+    "i_carga",
+    "temp_pan",
+    "tamp_bat",
 }
 
 # ==========================================
@@ -127,7 +127,7 @@ while True:
 # HELPERS
 # ==========================================
 def _parse_topic(topic: str) -> tuple[str, str] | tuple[None, None]:
-    """Extrae (sensor_id, variable) de universidad/jaen/{sensor_id}/{variable}."""
+    """Extrae (sensor_id, variable) de "uja/s1/{variable}."""
     prefix = TOPIC_BASE + "/"
     if not topic.startswith(prefix):
         return None, None
